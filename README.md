@@ -1,73 +1,56 @@
-# billing_record_optimizer
-This solution uses:
-Azure Cosmos DB (hot data, < 3 months)
-Azure Blob Storage (cold data, > 3 months)
-Azure Data Factory or Azure Functions for data archival
-Middleware function for unified reads
+# billing_record_optimizer Overview
 
-1. Data Archival Script (Durable Azure Function – Pseudocode)
-This script runs daily/weekly and exports data older than 3 months from Cosmos DB to Blob Storage.
+**This solution uses:**
+1. Azure Cosmos DB (hot data, < 3 months)
+2. Azure Blob Storage (cold data, > 3 months)
+3. Azure Data Factory or Azure Functions for data archival
+4. Middleware function for unified reads
 
-# Setup
-cutoff_date = datetime.utcnow() - timedelta(days=90)
-query = f"SELECT * FROM c WHERE c.timestamp < '{cutoff_date.isoformat()}'"
+## 1. Data Tiering Strategy
 
-# Cosmos DB Setup
-cosmos_client = CosmosClient(endpoint, key)
-container = cosmos_client.get_database_client("billing-db").get_container_client("records")
+| Tier      | Storage             | Access Frequency | Cost              |
+|-----------|---------------------|------------------|-------------------|
+| **Hot**   | Cosmos DB           | Frequent         | $$$ (expensive)   |
+| **Cold**  | Azure Blob (Cool/Archive) | Rare (≥ 3 months) | $ (very cheap)     |
 
-# Blob Storage Setup
-blob_container = blob_service_client.get_container_client("billing-archive")
-
-# Query with pagination
-items = container.query_items(query, enable_cross_partition_query=True)
-for page in items.by_page():
-    records = list(page)
-    blob_name = f"billing_{cutoff_date.strftime('%Y-%m-%d')}_{uuid4()}.json"
-    blob_container.upload_blob(name=blob_name, data=json.dumps(records))
-
-# (Optional) Delete records from Cosmos DB
-for record in records:
-    container.delete_item(record["id"], partition_key=record["partitionKey"])
-
- 2. Automated Data Archival Process
+## 2. Automated Data Archival Process
 Use Azure Data Factory (ADF) or Durable Azure Functions to automate data movement.
 
 Steps:
-Query Cosmos DB for records older than 3 months.
-Export data to Blob Storage (JSON or Parquet).
-Verify export succeeded.
-Delete archived records from Cosmos DB.
-Set a trigger to run daily or weekly.
-Add a Delete Activity after copy to remove records from Cosmos DB if export succeeds.
+1. Query Cosmos DB for records older than 3 months.
+2. Export data to Blob Storage (JSON or Parquet).
+3. Verify export succeeded.
+4. Delete archived records from Cosmos DB.
+5. Set a trigger to run daily or weekly.
+6. Add a Delete Activity after copy to remove records from Cosmos DB if export succeeds.
 
- 3. Unified Access Layer (Seamless Read API Support)
+## 3. Unified Access Layer (Seamless Read API Support)
 Introduce a middleware (e.g., Azure API Management policy, Azure Function, or custom service) to:
-Intercept read requests.
-Check if the requested data is within the last 3 months:
-If yes → read from Cosmos DB.
-If no → read from Blob Storage.
-For write requests → continue writing to Cosmos DB.
+1. Intercept read requests.
+2. Check if the requested data is within the last 3 months:
+    * If yes → read from Cosmos DB.
+    * If no → read from Blob Storage.
+3. For write requests → continue writing to Cosmos DB.
 
-4. Blob Storage Optimization
-Use Cool Tier for infrequently accessed files.
-Use Archive Tier if data is accessed rarely.
-Apply lifecycle rules to move blobs between tiers automatically.
+## 4. Blob Storage Optimization
+1. Use Cool Tier for infrequently accessed files.
+2. Use Archive Tier if data is accessed rarely.
+3. Apply lifecycle rules to move blobs between tiers automatically.
 
- 5. Monitoring & Governance
-Add Application Insights for observability.
-Track archival status and alert on failures.
-Use RBAC & managed identities for secure access between services.
+## 5. Monitoring & Governance
+1. Add Application Insights for observability.
+2. Track archival status and alert on failures.
+3. Use RBAC & managed identities for secure access between services.
 
-**Move old blobs to Cool or Archive Tier**
-# Move to cool tier
+# Move old blobs to Cool or Archive Tier
+* Move to cool tier
 az storage blob set-tier \
   --container-name billing-archive \
   --name billing_2024-12-01.json \
   --tier Cool \
   --account-name <your-storage-account>
 
-# Move to archive tier (even cheaper)
+* Move to archive tier (even cheaper)
 az storage blob set-tier \
   --container-name billing-archive \
   --name billing_2023-01-01.json \

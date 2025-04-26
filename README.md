@@ -58,3 +58,19 @@ Apply lifecycle rules to move blobs between tiers automatically.
 Add Application Insights for observability.
 Track archival status and alert on failures.
 Use RBAC & managed identities for secure access between services.
+
+**Move old blobs to Cool or Archive Tier**
+# Move to cool tier
+az storage blob set-tier \
+  --container-name billing-archive \
+  --name billing_2024-12-01.json \
+  --tier Cool \
+  --account-name <your-storage-account>
+
+# Move to archive tier (even cheaper)
+az storage blob set-tier \
+  --container-name billing-archive \
+  --name billing_2023-01-01.json \
+  --tier Archive \
+  --account-name <your-storage-account>
+
